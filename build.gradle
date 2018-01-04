@@ -1,0 +1,215 @@
+ext {
+    ver = [
+            failSafe                : '[1.0.4, 1.1.0)',
+            springReactor           : "[3.1.2.RELEASE, 3.2.0.RELEASE)",
+
+            spring                  : '[5.0.2.RELEASE,5.1.0.RELEASE)',
+            groovy                  : '[2.4.13, 2.5)',
+            spock                   : '[1.1-groovy-2.4, 2.0-groovy-2.4)',
+            cglib                   : '[3.2.5, 3.3.0)',
+            objenesis               : '[2.6, 3.0)',
+            jaxbApi                 : '[2.3.0, 2.4.0)',
+    ]
+}
+
+
+buildscript {
+    ext {
+        ver = [
+                axionRelease                : '[1.8.1,1.9.0)',
+        ]
+    }
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        jcenter()
+    }
+    dependencies {
+        classpath(
+                "pl.allegro.tech.build:axion-release-plugin:${ver.axionRelease}",
+        )
+    }
+}
+
+apply plugin: 'java'
+apply plugin: 'groovy'
+apply plugin: 'signing'
+apply plugin: 'maven'
+apply plugin: 'idea'
+apply plugin: 'pl.allegro.tech.build.axion-release'
+
+group = 'com.github.venth.failsafe'
+
+scmVersion {
+    ignoreUncommittedChanges = false
+    tag {
+        prefix = 'v'
+        versionSeparator = ''
+    }
+}
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    jcenter()
+}
+
+dependencies {
+    compile(
+            // circuit breaker and repeater on failures
+            "net.jodah:failsafe:${ver.failSafe}",
+
+            // reactive
+            "io.projectreactor:reactor-core:${ver.springReactor}",
+    )
+
+    testCompile(
+            // mandatory dependencies for using Spock
+            "org.springframework:spring-test:${ver.spring}",
+            "org.codehaus.groovy:groovy-all:${ver.groovy}",
+            "org.spockframework:spock-core:${ver.spock}",
+            "org.spockframework:spock-spring:${ver.spock}",
+
+            // optional dependencies for using Spock
+            // allows mocking of classes (in addition to interfaces)
+            "cglib:cglib-nodep:${ver.cglib}",
+            // allows mocking of classes without default constructor (together with CGLIB)
+            "org.objenesis:objenesis:${ver.objenesis}",
+    )
+}
+
+build.doFirst { project.version = scmVersion.uncachedVersion.decoratedVersion }
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+}
+
+compileJava {
+    options.fork = true
+    options.incremental = true
+    options.compilerArgs << '-parameters'
+
+    dependsOn processResources
+}
+
+wrapper {
+    gradleVersion = '4.4.1'
+}
+
+sourceSets {
+    main {
+        output.resourcesDir = java.outputDir
+    }
+    test {
+        output.resourcesDir = groovy.outputDir
+    }
+}
+
+
+signing {
+    required {
+        !scmVersion.version.endsWith("SNAPSHOT") && gradle.taskGraph.hasTask("uploadArchives")
+    }
+    sign configurations.archives
+}
+
+archivesBaseName = rootProject.name
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                authentication(
+                        userName: project.properties.get('ossrhUsername', ''),
+                        password: project.properties.get('ossrhPassword', '')
+                )
+            }
+
+            snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+                authentication(
+                        userName: project.properties.get('ossrhUsername', ''),
+                        password: project.properties.get('ossrhPassword', '')
+                )
+            }
+
+            pom.project {
+                name rootProject.name
+                packaging 'jar'
+                // optionally artifactId can be defined here
+                description project.description
+                url 'https://github.com/venth/failsafe-rxjava2'
+
+                scm {
+                    connection 'scm:git:ssh://github.com:venth/failsafe-reactor.git'
+                    developerConnection 'scm:git:ssh://github.com:venth/failsafe-reactor.git'
+                    url 'https://github.com/venth/failsafe-reactor'
+                }
+
+                licenses {
+                    license {
+                        name 'MIT License'
+                        url 'http://www.opensource.org/licenses/mit-license.php'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id 'venth'
+                        name 'Artur Krysiak'
+                        email 'artur.krysiak.warszawa@gmail.com'
+                        organizationUrl 'https://github.com/venth'
+                    }
+                }
+            }
+        }
+    }
+}
+
+project.version = scmVersion.uncachedVersion.decoratedVersion
+
+task fixReleaseVersion(type: Task) {
+    doLast {
+        version = scmVersion.uncachedVersion.decoratedVersion
+    }
+}
+
+task release(type: Task, overwrite: true) {}
+
+//--- build aliases : define a synonym here if you want a shortcut to run multiple targets
+def buildAliases = [
+        'release': ['clean', 'createRelease', 'fixReleaseVersion', 'build', 'uploadArchives', 'pushRelease'],
+]
+def expandedTaskList = []
+
+gradle.startParameter.taskNames.each {
+    expandedTaskList << (buildAliases[it] ? buildAliases[it] : it)
+}
+
+gradle.startParameter.taskNames = expandedTaskList.flatten()
+
+idea {
+    module {
+        // love reading sources :)
+        downloadSources = true
+
+        // convince intellij to used build as output directory for a module
+        outputDir compileJava.destinationDir
+        testOutputDir compileTestGroovy.destinationDir
+        inheritOutputDirs = false
+    }
+}
