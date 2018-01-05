@@ -1,4 +1,4 @@
-# Circuit Breaker Operator for Spring Reactor
+# Circuit Breaker Operator for [Spring Reactor](https://projectreactor.io)
 [![Build Status](https://travis-ci.org/venth/failsafe-reactor.svg?branch=master)](https://travis-ci.org/venth/failsafe-reactor)
 [![Maven Central](https://img.shields.io/maven-central/v/com.github.venth.failsafe/reactor.svg?style=plastic)]()
 Since introduction of [Spring Reactive](https://docs.spring.io/spring/docs/5.0.x/spring-framework-reference/web-reactive.html#spring-webflux)
