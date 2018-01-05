@@ -34,3 +34,14 @@ shall explain the usage.
 * xxxSequence - a sequence that depends on the operator's type.
 * circuitBreaker is configured instance of [FailSafe](https://github.com/jhalterman/failsafe) CircuitBreaker.
 
+## Flux
+
+```
+fluxSequence.transform(CircuitBreakerOperator.of(circuitBreaker))
+```
+
+## Mono
+
+```
+monoSequence.transform(CircuitBreakerOperator.of(circuitBreaker))
+```
